@@ -445,6 +445,7 @@ func TestSQLiteConfig(t *testing.T) {
 		t.Fatalf("failed to create temporary directory: %s", err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
+	missingParentDir := filepath.Join(t.TempDir(), "missing-parent")
 
 	tests := []struct {
 		name      string
@@ -475,9 +476,9 @@ func TestSQLiteConfig(t *testing.T) {
 		{
 			name: "parent folder must exist",
 			cfg: SQLite{
-				DBFile: "/i/dont/exist/test.db",
+				DBFile: filepath.Join(missingParentDir, "test.db"),
 			},
-			errString: "parent directory of db_file does not exist: stat.*",
+			errString: "parent directory of db_file does not exist: .*",
 		},
 	}
 

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -32,7 +33,11 @@ func getDefaultExternalConfig(t *testing.T) External {
 	t.Cleanup(func() { os.RemoveAll(dir) })
 
 	// nolint:golangci-lint,gosec
-	err = os.WriteFile(filepath.Join(dir, "garm-external-provider"), []byte{}, 0o755)
+	name := "garm-external-provider"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	err = os.WriteFile(filepath.Join(dir, name), []byte{}, 0o755)
 	if err != nil {
 		t.Fatalf("failed to write file: %s", err)
 	}
@@ -45,6 +50,12 @@ func getDefaultExternalConfig(t *testing.T) External {
 
 func TestExternal(t *testing.T) {
 	cfg := getDefaultExternalConfig(t)
+	missingConfigFile := filepath.Join(t.TempDir(), "missing-config")
+	missingProviderDir := filepath.Join(t.TempDir(), "missing-provider")
+	executableName := "garm-external-provider"
+	if runtime.GOOS == "windows" {
+		executableName += ".exe"
+	}
 
 	tests := []struct {
 		name      string
@@ -67,10 +78,10 @@ func TestExternal(t *testing.T) {
 		{
 			name: "Config must exist if specified",
 			cfg: External{
-				ConfigFile:  "/there/is/no/config/here",
+				ConfigFile:  missingConfigFile,
 				ProviderDir: cfg.ProviderDir,
 			},
-			errString: "failed to access config file /there/is/no/config/here",
+			errString: fmt.Sprintf("failed to access config file %s", missingConfigFile),
 		},
 		{
 			name: "Provider dir path must be absolute",
@@ -92,9 +103,9 @@ func TestExternal(t *testing.T) {
 			name: "Provider executable not found",
 			cfg: External{
 				ConfigFile:  "",
-				ProviderDir: "/tmp",
+				ProviderDir: missingProviderDir,
 			},
-			errString: "failed to access external provider binary /tmp/garm-external-provider",
+			errString: fmt.Sprintf("failed to access external provider binary %s", filepath.Join(missingProviderDir, executableName)),
 		},
 	}
 
@@ -112,6 +123,10 @@ func TestExternal(t *testing.T) {
 }
 
 func TestProviderExecutableIsExecutable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows executability is determined by PATHEXT, not POSIX mode bits")
+	}
+
 	cfg := getDefaultExternalConfig(t)
 
 	execPath, err := cfg.ExecutablePath()

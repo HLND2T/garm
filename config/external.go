@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -97,7 +98,11 @@ func (e *External) GetEnvironmentVariables() []string {
 func (e *External) ExecutablePath() (string, error) {
 	execPath := e.ProviderExecutable
 	if execPath == "" {
-		execPath = filepath.Join(e.ProviderDir, "garm-external-provider")
+		executableName := "garm-external-provider"
+		if runtime.GOOS == "windows" {
+			executableName += ".exe"
+		}
+		execPath = filepath.Join(e.ProviderDir, executableName)
 	}
 
 	if !filepath.IsAbs(execPath) {

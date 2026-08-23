@@ -16,6 +16,7 @@ package exec
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -23,7 +24,7 @@ func IsExecutable(path string) bool {
 	pathExt := os.Getenv("PATHEXT")
 	execList := strings.Split(pathExt, ";")
 	for _, ext := range execList {
-		if strings.HasSuffix(path, ext) {
+		if strings.EqualFold(filepath.Ext(path), strings.TrimSpace(ext)) {
 			return true
 		}
 	}
