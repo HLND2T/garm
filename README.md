@@ -78,6 +78,7 @@ GARM uses external providers to create runners in a particular IaaS. Providers a
 | Azure | [cloudbase/garm-provider-azure](https://github.com/cloudbase/garm-provider-azure) |
 | CloudStack | [nexthop-ai/garm-provider-cloudstack](https://github.com/nexthop-ai/garm-provider-cloudstack) |
 | GCP | [cloudbase/garm-provider-gcp](https://github.com/cloudbase/garm-provider-gcp) |
+| Hyper-V | [HLND2T/garm-provider-hyperv](https://github.com/HLND2T/garm-provider-hyperv) |
 | Incus | [cloudbase/garm-provider-incus](https://github.com/cloudbase/garm-provider-incus) |
 | Kubernetes | [mercedes-benz/garm-provider-k8s](https://github.com/mercedes-benz/garm-provider-k8s) |
 | LXD | [cloudbase/garm-provider-lxd](https://github.com/cloudbase/garm-provider-lxd) |
