@@ -226,6 +226,7 @@ func (i *instanceManager) handleCreateInstanceInProvider(instance params.Instanc
 	defer func() {
 		if instanceIDToDelete != "" {
 			deleteInstanceParams := common.DeleteInstanceParams{
+				InstanceName: instance.Name,
 				DeleteInstanceV011: common.DeleteInstanceV011Params{
 					ProviderBaseParams: baseParams,
 				},
@@ -307,6 +308,7 @@ func (i *instanceManager) handleDeleteInstanceInProvider(instance params.Instanc
 		"provider_id", identifier)
 
 	deleteInstanceParams := common.DeleteInstanceParams{
+		InstanceName: instance.Name,
 		DeleteInstanceV011: common.DeleteInstanceV011Params{
 			ProviderBaseParams: baseParams,
 		},

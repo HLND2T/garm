@@ -29,6 +29,13 @@ type CreateInstanceParams struct {
 }
 
 type DeleteInstanceParams struct {
+	// InstanceName is the GARM runner name for the instance being deleted.
+	// It lets fixed-resource providers (for example a fixed set of Hyper-V
+	// guests) make DeleteInstance idempotent: when a delete is retried after
+	// the backing resource was already reclaimed and reallocated to a newer
+	// runner, the provider can detect the stale request and ignore it instead
+	// of tearing down the new allocation.
+	InstanceName       string
 	DeleteInstanceV011 DeleteInstanceV011Params
 }
 

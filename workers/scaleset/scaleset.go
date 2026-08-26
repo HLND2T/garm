@@ -593,6 +593,7 @@ func (w *Worker) consolidateProviderState() error {
 			// in the deleted state.
 			// That means that if we have a runner in the provider but not the DB, it is most
 			// likely an inconsistency.
+			deleteInstanceParams.InstanceName = runner.Name
 			if err := w.provider.DeleteInstance(w.ctx, runner.Name, deleteInstanceParams); err != nil {
 				slog.ErrorContext(w.ctx, "error removing instance", "instance_name", runner.Name, "error", err)
 			}

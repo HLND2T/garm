@@ -143,11 +143,12 @@ func (e *external) CreateInstance(ctx context.Context, bootstrapParams commonPar
 }
 
 // Delete instance will delete the instance in a provider.
-func (e *external) DeleteInstance(ctx context.Context, instance string, _ common.DeleteInstanceParams) error {
+func (e *external) DeleteInstance(ctx context.Context, instance string, deleteInstanceParams common.DeleteInstanceParams) error {
 	asEnv := []string{
 		fmt.Sprintf("GARM_COMMAND=%s", commonExecution.DeleteInstanceCommand),
 		fmt.Sprintf("GARM_CONTROLLER_ID=%s", e.controllerID),
 		fmt.Sprintf("GARM_INSTANCE_ID=%s", instance),
+		fmt.Sprintf("GARM_INSTANCE_NAME=%s", deleteInstanceParams.InstanceName),
 		fmt.Sprintf("GARM_PROVIDER_CONFIG_FILE=%s", e.cfg.External.ConfigFile),
 	}
 	asEnv = append(asEnv, e.environmentVariables...)

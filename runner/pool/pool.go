@@ -1127,6 +1127,7 @@ func (r *basePoolManager) addInstanceToProvider(instance params.Instance) error 
 	defer func() {
 		if instanceIDToDelete != "" {
 			deleteInstanceParams := common.DeleteInstanceParams{
+				InstanceName: instance.Name,
 				DeleteInstanceV011: common.DeleteInstanceV011Params{
 					ProviderBaseParams: r.getProviderBaseParams(pool),
 				},
@@ -1591,6 +1592,7 @@ func (r *basePoolManager) deleteInstanceFromProvider(ctx context.Context, instan
 		"provider_id", identifier)
 
 	deleteInstanceParams := common.DeleteInstanceParams{
+		InstanceName: instance.Name,
 		DeleteInstanceV011: common.DeleteInstanceV011Params{
 			ProviderBaseParams: r.getProviderBaseParams(pool),
 		},
