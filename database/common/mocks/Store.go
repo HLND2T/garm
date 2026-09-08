@@ -5465,6 +5465,65 @@ func (_c *Store_PoolInstanceCount_Call) RunAndReturn(run func(context.Context, s
 	return _c
 }
 
+// ReconcileInstanceRunnerActive provides a mock function with given fields: ctx, entity, instance, agentID
+func (_m *Store) ReconcileInstanceRunnerActive(ctx context.Context, entity params.ForgeEntity, instance params.Instance, agentID int64) (bool, error) {
+	ret := _m.Called(ctx, entity, instance, agentID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReconcileInstanceRunnerActive")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, params.ForgeEntity, params.Instance, int64) (bool, error)); ok {
+		return rf(ctx, entity, instance, agentID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, params.ForgeEntity, params.Instance, int64) bool); ok {
+		r0 = rf(ctx, entity, instance, agentID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, params.ForgeEntity, params.Instance, int64) error); ok {
+		r1 = rf(ctx, entity, instance, agentID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Store_ReconcileInstanceRunnerActive_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReconcileInstanceRunnerActive'
+type Store_ReconcileInstanceRunnerActive_Call struct {
+	*mock.Call
+}
+
+// ReconcileInstanceRunnerActive is a helper method to define mock.On call
+//   - ctx context.Context
+//   - entity params.ForgeEntity
+//   - instance params.Instance
+//   - agentID int64
+func (_e *Store_Expecter) ReconcileInstanceRunnerActive(ctx interface{}, entity interface{}, instance interface{}, agentID interface{}) *Store_ReconcileInstanceRunnerActive_Call {
+	return &Store_ReconcileInstanceRunnerActive_Call{Call: _e.mock.On("ReconcileInstanceRunnerActive", ctx, entity, instance, agentID)}
+}
+
+func (_c *Store_ReconcileInstanceRunnerActive_Call) Run(run func(ctx context.Context, entity params.ForgeEntity, instance params.Instance, agentID int64)) *Store_ReconcileInstanceRunnerActive_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(params.ForgeEntity), args[2].(params.Instance), args[3].(int64))
+	})
+	return _c
+}
+
+func (_c *Store_ReconcileInstanceRunnerActive_Call) Return(_a0 bool, _a1 error) *Store_ReconcileInstanceRunnerActive_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Store_ReconcileInstanceRunnerActive_Call) RunAndReturn(run func(context.Context, params.ForgeEntity, params.Instance, int64) (bool, error)) *Store_ReconcileInstanceRunnerActive_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SearchFileObjectByTags provides a mock function with given fields: ctx, tags, page, pageSize
 func (_m *Store) SearchFileObjectByTags(ctx context.Context, tags []string, page uint64, pageSize uint64) (params.FileObjectPaginatedResponse, error) {
 	ret := _m.Called(ctx, tags, page, pageSize)

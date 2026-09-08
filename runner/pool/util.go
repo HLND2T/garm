@@ -219,10 +219,11 @@ func (r *basePoolManager) listRunnersWithPagination() ([]forgeRunner, error) {
 
 	ret := make([]forgeRunner, len(allRunners))
 	for idx, val := range allRunners {
+		status := params.RunnerReference{Status: val.GetStatus(), Busy: val.GetBusy()}.GetStatus()
 		ret[idx] = forgeRunner{
 			ID:     val.GetID(),
 			Name:   val.GetName(),
-			Status: val.GetStatus(),
+			Status: string(status),
 			Labels: make([]RunnerLabels, len(val.Labels)),
 		}
 		for labelIdx, label := range val.Labels {

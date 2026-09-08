@@ -1827,15 +1827,17 @@ func (r *basePoolManager) runnerCleanup() (err error) {
 		return fmt.Errorf("failed to fetch github runners: %w", err)
 	}
 
+	reconcileErr := r.reconcileRunnerStatuses(runners)
+	// A failed status update must not prevent the existing cleanup paths.
 	if err := r.reapTimedOutRunners(runners); err != nil {
-		return fmt.Errorf("failed to reap timed out runners: %w", err)
+		return errors.Join(reconcileErr, fmt.Errorf("failed to reap timed out runners: %w", err))
 	}
 
 	if err := r.cleanupOrphanedRunners(runners); err != nil {
-		return fmt.Errorf("failed to cleanup orphaned runners: %w", err)
+		return errors.Join(reconcileErr, fmt.Errorf("failed to cleanup orphaned runners: %w", err))
 	}
 
-	return nil
+	return reconcileErr
 }
 
 func (r *basePoolManager) cleanupOrphanedRunners(runners []forgeRunner) error {

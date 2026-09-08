@@ -105,6 +105,9 @@ type InstanceStore interface {
 	DeleteInstance(ctx context.Context, poolID string, instanceNameOrID string) error
 	DeleteInstanceByName(ctx context.Context, instanceName string) error
 	UpdateInstance(ctx context.Context, instanceNameOrID string, param params.UpdateInstanceParams) (params.Instance, error)
+	// ReconcileInstanceRunnerActive conditionally records a busy observation for a traditional pool runner.
+	// A stale identity, completed runner, or instance outside the running state is a no-op.
+	ReconcileInstanceRunnerActive(ctx context.Context, entity params.ForgeEntity, instance params.Instance, agentID int64) (bool, error)
 	// ForceUpdateInstance functions identically to UpdateInstance with one important distinction. It does not
 	// validate the agent ID or instance status or runner status transitions. This function must only be used in
 	// recovery scenarios, where GARM crashed or was restarted while runners were going through a transitory
