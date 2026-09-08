@@ -18,10 +18,14 @@ package pool
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/google/go-github/v84/github"
 	"github.com/google/uuid"
@@ -33,6 +37,7 @@ import (
 	"github.com/cloudbase/garm/locking"
 	"github.com/cloudbase/garm/params"
 	runnerMocks "github.com/cloudbase/garm/runner/common/mocks"
+	"github.com/cloudbase/garm/util/github/scalesets"
 )
 
 func init() {
@@ -250,4 +255,63 @@ func (s *PoolStressTestSuite) TestRunnerCleanupDoesNotUseFailedSnapshot() {
 	s.Equal(instance.RunnerStatus, after.RunnerStatus)
 	s.Equal(instance.Status, after.Status)
 	s.Equal(instance.UpdatedAt, after.UpdatedAt)
+}
+
+func (s *PoolStressTestSuite) TestGetGithubRunnersSupplementsScaleSetBusyState() {
+	for _, restFails := range []bool{false, true} {
+		s.Run(fmt.Sprintf("rest_failure=%t", restFails), func() {
+			client := runnerMocks.NewGithubClient(s.T())
+			var serviceURL string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				var payload any
+				if req.URL.Path == "/actions/runner-registration" {
+					payload = params.ActionsServiceAdminInfoResponse{URL: serviceURL, Token: "test-admin-token"}
+				} else {
+					// The real scale-set list can omit busy even while REST reports it.
+					payload = params.RunnerReferenceList{Count: 2, RunnerReferences: []params.RunnerReference{
+						{ID: 1, Name: "working", Status: string(params.RunnerOnline)},
+						{ID: 2, Name: "missing-from-rest-page", Status: string(params.RunnerOnline)},
+					}}
+				}
+				if err := json.NewEncoder(w).Encode(payload); err != nil {
+					s.T().Error(err)
+				}
+			}))
+			defer server.Close()
+			serviceURL = server.URL
+			baseURL, err := url.Parse(serviceURL)
+			s.Require().NoError(err)
+			client.On("GetEntity").Return(s.entity)
+			client.On("GithubBaseURL").Return(baseURL)
+			client.On("CreateEntityRegistrationToken", mock.Anything).Return(&github.RegistrationToken{
+				Token: github.Ptr("test-registration-token"), ExpiresAt: &github.Timestamp{Time: time.Now().Add(time.Hour)},
+			}, &github.Response{}, nil).Once()
+			if restFails {
+				client.On("ListEntityRunners", mock.Anything, mock.Anything).Return((*github.Runners)(nil), (*github.Response)(nil), errors.New("REST unavailable")).Once()
+			} else {
+				client.On("ListEntityRunners", mock.Anything, mock.Anything).Return(&github.Runners{Runners: []*github.Runner{
+					{ID: github.Ptr(int64(1)), Name: github.Ptr("working"), Status: github.Ptr(string(params.RunnerOnline)), Busy: github.Ptr(true)},
+					{ID: github.Ptr(int64(3)), Name: github.Ptr("missing-from-scaleset-list"), Status: github.Ptr(string(params.RunnerOnline)), Busy: github.Ptr(true)},
+				}}, &github.Response{}, nil).Once()
+			}
+			ss, err := scalesets.NewClient(client)
+			s.Require().NoError(err)
+			mgr := &basePoolManager{ctx: s.adminCtx, entity: s.entity, ghcli: client, scaleSetClient: ss}
+			runners, err := mgr.GetGithubRunners()
+			s.Require().NoError(err)
+			byName := make(map[string]forgeRunner)
+			for _, runner := range runners {
+				byName[runner.Name] = runner
+			}
+			s.Contains(byName, "missing-from-rest-page", "REST pagination gaps must not remove cleanup snapshot entries")
+			if restFails {
+				s.Len(runners, 2)
+				s.Equal(string(params.RunnerIdle), byName["working"].Status)
+			} else {
+				s.Len(runners, 3)
+				s.Equal(string(params.RunnerActive), byName["working"].Status)
+				s.Equal(string(params.RunnerActive), byName["missing-from-scaleset-list"].Status)
+			}
+		})
+	}
 }

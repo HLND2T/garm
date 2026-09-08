@@ -292,5 +292,33 @@ func (r *basePoolManager) GetGithubRunners() ([]forgeRunner, error) {
 		return r.listRunnersWithPagination()
 	}
 	slog.DebugContext(r.ctx, "Scaleset API runner list succeeded", "runners", runners)
+	// The scale-set list can report busy=false for working traditional runners.
+	// Supplement it with positive REST observations, while retaining its members:
+	// a runner missing during REST pagination is not evidence it was removed.
+	restRunners, err := r.listRunnersWithPagination()
+	if err != nil {
+		slog.WarnContext(r.ctx, "failed to read REST busy states; retaining scaleset cleanup snapshot", "error", err)
+		return runners, nil
+	}
+	type runnerIdentity struct {
+		id   int64
+		name string
+	}
+	indices := make(map[runnerIdentity]int, len(runners))
+	for idx, runner := range runners {
+		indices[runnerIdentity{runner.ID, runner.Name}] = idx
+	}
+	for _, runner := range restRunners {
+		if runner.Status != string(params.RunnerActive) {
+			continue
+		}
+		identity := runnerIdentity{runner.ID, runner.Name}
+		if idx, ok := indices[identity]; ok {
+			runners[idx] = runner
+		} else {
+			indices[identity] = len(runners)
+			runners = append(runners, runner)
+		}
+	}
 	return runners, nil
 }
