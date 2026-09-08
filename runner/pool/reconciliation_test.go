@@ -123,6 +123,32 @@ func (s *PoolStressTestSuite) TestReconcileRunnerStatusesWithoutQueuedWebhook() 
 	s.Require().NoError(err)
 	s.Equal(params.RunnerTerminated, completed.RunnerStatus)
 	s.Equal(commonParams.InstancePendingDelete, completed.Status)
+
+	// Once the job finishes, the normal provider deletion path must leave only
+	// the replacement idle runner. Reconciliation must not keep spent capacity.
+	s.providerMock.On("DeleteInstance", mock.Anything, instance.Name, mock.Anything).Return(nil).Once()
+	s.Require().NoError(s.mgr.deletePendingInstances())
+	const deletionTimeout = 10 * time.Second
+	const deletionPollInterval = 20 * time.Millisecond
+	s.Require().Eventually(func() bool {
+		remaining, listErr := s.store.ListPoolInstances(s.adminCtx, pool.ID, false)
+		return listErr == nil && len(remaining) == 1 && remaining[0].Name != instance.Name
+	}, deletionTimeout, deletionPollInterval)
+	remaining, err := s.store.ListPoolInstances(s.adminCtx, pool.ID, false)
+	s.Require().NoError(err)
+	s.Require().Len(remaining, 1)
+	_, err = s.store.ForceUpdateInstance(s.adminCtx, remaining[0].Name, params.UpdateInstanceParams{
+		Status: commonParams.InstanceRunning, RunnerStatus: params.RunnerIdle,
+	})
+	s.Require().NoError(err)
+	for range 2 {
+		s.Require().NoError(s.mgr.reconcileRunnerStatuses([]forgeRunner{s.busySnapshot(instance)}))
+		s.Require().NoError(s.mgr.ensureIdleRunnersForOnePool(pool))
+	}
+	remaining, err = s.store.ListPoolInstances(s.adminCtx, pool.ID, false)
+	s.Require().NoError(err)
+	s.Require().Len(remaining, 1, "completed work must settle at min_idle=1")
+	s.Equal(params.RunnerIdle, remaining[0].RunnerStatus)
 }
 
 func (s *PoolStressTestSuite) TestReconcileRunnerStatusesFiltersAndLocks() {
