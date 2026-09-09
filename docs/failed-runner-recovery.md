@@ -32,8 +32,8 @@ The min-idle calculation counted it as available; the reaper required another
 - [x] Red regressions reproduced failure to replenish and delayed failed cleanup
 - [x] Targeted pool tests and real Windows PowerShell HTTP tests pass
 - [x] Additional boundary coverage, full regression and incremental lint
-- [ ] Review final diff and push to an authorized remote
-- [ ] Back up binary, database and custom template; deploy and verify
+- [x] Review final diff and push to an authorized remote
+- [x] Back up binary, database and custom template; deploy and verify
 
 HTTP retries reduce sensitivity to transient failures; they do not repair the
 upstream cause of a persistent 520. There remains a distributed race between a
@@ -69,3 +69,21 @@ do not roll back the whole job database just to restore a template.
   custom-template diff retains workspace, credentials transformation and service logic.
 - The original production failure recovered under the old binary around 17:32-17:33;
   this is incident evidence, not attributed to the new deployment.
+
+## Deployment acceptance (2026-09-09, UTC+08:00)
+
+- Production source: `a672d3cbb39571cf60324162b08de20428fc9c00`, pushed to
+  `HLND2T/garm` main after verifying push permission.
+- Installed at 17:38:53: `failed-runner-a672d3cb`, Go 1.26.2, `vcs.modified=false`.
+- Binary SHA256: `6F84F64BE6C30CFB6FCE6EF994186083B20D0E827F7131EAF841EDD9F0F4FC68`.
+- Backup: `C:\garm\backups\busy-reconcile-20260909-173849`, containing the previous
+  binary, stopped SQLite DB/WAL/SHM, configuration and original template 5.
+- Custom template 5 updated at 17:39:24; API readback matched the tested file:
+  `B9C761FC550BAA21EF2AF921A66907B2DDE5DC189AE75B178E42A8125F3B7151`.
+- Authenticated server version and scheduled-task health verified. At 17:39:25,
+  `garm-hv-windows-yukgo4djeg0t` remained running/active and
+  `garm-hv-windows-w3oryns0zf1m` remained running/idle, matching pre-deployment state.
+  Pool enabled/min-idle/max/template remained true/1/2/5. No guests were stopped.
+- No ERROR entries observed from startup through 17:39:37. No production faults
+  were injected or healthy runners recycled; failure recovery and transient HTTP
+  behavior were verified by the regression tests, not by disrupting live jobs.
