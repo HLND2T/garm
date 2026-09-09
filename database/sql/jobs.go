@@ -176,6 +176,9 @@ func (s *sqlDatabase) LockJob(_ context.Context, jobID int64, entityID string) e
 			return fmt.Errorf("error fetching job: %w", q.Error)
 		}
 
+		if workflowJob.Status != string(params.JobStatusQueued) {
+			return runnerErrors.NewConflictError("job %d is no longer queued", jobID)
+		}
 		if workflowJob.LockedBy.String() == entityID {
 			// Already locked by us.
 			return nil
@@ -187,8 +190,16 @@ func (s *sqlDatabase) LockJob(_ context.Context, jobID int64, entityID string) e
 
 		workflowJob.LockedBy = entityUUID
 
-		if err := tx.Save(&workflowJob).Error; err != nil {
-			return fmt.Errorf("error saving job: %w", err)
+		claim := tx.Model(&WorkflowJob{}).Where("id = ? AND status = ? AND locked_by = ?", workflowJob.ID, params.JobStatusQueued, uuid.Nil).
+			Update("locked_by", entityUUID)
+		if claim.Error != nil {
+			return fmt.Errorf("error claiming queued job: %w", claim.Error)
+		}
+		if claim.RowsAffected == 0 {
+			return runnerErrors.NewConflictError("job %d is no longer claimable", jobID)
+		}
+		if err := tx.Preload("Instance").First(&workflowJob, workflowJob.ID).Error; err != nil {
+			return err
 		}
 
 		var err error
@@ -316,6 +327,12 @@ func (s *sqlDatabase) CreateOrUpdateJob(ctx context.Context, job params.Job) (pa
 		}
 
 		if workflowJob.ID != 0 {
+			// Serialize the forward-only check with webhook and reconciliation writes.
+			if jobStateRank(job.Status) < jobStateRank(workflowJob.Status) {
+				var err error
+				asParams, err = sqlWorkflowJobToParamsJob(workflowJob)
+				return err
+			}
 			// Update workflowJob with values from job.
 			operation = common.UpdateOperation
 
@@ -388,9 +405,24 @@ func (s *sqlDatabase) CreateOrUpdateJob(ctx context.Context, job params.Job) (pa
 		return params.Job{}, err
 	}
 
-	s.sendNotify(common.JobEntityType, operation, asParams)
+	if operation != "" {
+		s.sendNotify(common.JobEntityType, operation, asParams)
+	}
 
 	return asParams, nil
+}
+
+func jobStateRank(status string) int {
+	switch status {
+	case string(params.JobStatusQueued):
+		return 1
+	case string(params.JobStatusInProgress):
+		return 2
+	case string(params.JobStatusCompleted):
+		return 3
+	default:
+		return 0
+	}
 }
 
 // ListJobsByStatus lists all jobs for a given status.
@@ -511,7 +543,9 @@ func (s *sqlDatabase) DeleteInactionableJobs(_ context.Context, olderThan time.D
 			Preload("Instance").
 			Where("(status != ? AND instance_id IS NULL) OR (status = ? AND instance_id IS NOT NULL)", params.JobStatusQueued, params.JobStatusCompleted)
 		if olderThan > 0 {
-			q = q.Where("created_at < ?", time.Now().Add(-olderThan))
+			// Retain newly reconciled terminal state for the full webhook grace
+			// period, even when the job itself was created hours ago.
+			q = q.Where("updated_at < ?", time.Now().Add(-olderThan))
 		}
 		if err := q.Find(&jobs).Error; err != nil {
 			return fmt.Errorf("fetching inactionable jobs: %w", err)

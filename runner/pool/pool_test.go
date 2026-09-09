@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -117,7 +116,7 @@ func (s *PoolStressTestSuite) SetupTest() {
 		controllerInfo:   s.controllerInfo,
 		providers:        map[string]common.Provider{"test-provider": s.providerMock},
 		jobs:             make(map[int64]params.Job),
-		checkedJobs:      make(map[int64]time.Time),
+		jobChecks:        &jobCheckCoordinator{},
 		quit:             make(chan struct{}),
 		consumer:         &garmTesting.MockConsumer{},
 		wg:               &sync.WaitGroup{},

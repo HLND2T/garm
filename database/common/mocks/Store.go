@@ -5524,6 +5524,64 @@ func (_c *Store_ReconcileInstanceRunnerActive_Call) RunAndReturn(run func(contex
 	return _c
 }
 
+// ReconcileQueuedJob provides a mock function with given fields: ctx, entity, observed
+func (_m *Store) ReconcileQueuedJob(ctx context.Context, entity params.ForgeEntity, observed params.Job) (bool, error) {
+	ret := _m.Called(ctx, entity, observed)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReconcileQueuedJob")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, params.ForgeEntity, params.Job) (bool, error)); ok {
+		return rf(ctx, entity, observed)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, params.ForgeEntity, params.Job) bool); ok {
+		r0 = rf(ctx, entity, observed)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, params.ForgeEntity, params.Job) error); ok {
+		r1 = rf(ctx, entity, observed)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Store_ReconcileQueuedJob_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReconcileQueuedJob'
+type Store_ReconcileQueuedJob_Call struct {
+	*mock.Call
+}
+
+// ReconcileQueuedJob is a helper method to define mock.On call
+//   - ctx context.Context
+//   - entity params.ForgeEntity
+//   - observed params.Job
+func (_e *Store_Expecter) ReconcileQueuedJob(ctx interface{}, entity interface{}, observed interface{}) *Store_ReconcileQueuedJob_Call {
+	return &Store_ReconcileQueuedJob_Call{Call: _e.mock.On("ReconcileQueuedJob", ctx, entity, observed)}
+}
+
+func (_c *Store_ReconcileQueuedJob_Call) Run(run func(ctx context.Context, entity params.ForgeEntity, observed params.Job)) *Store_ReconcileQueuedJob_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(params.ForgeEntity), args[2].(params.Job))
+	})
+	return _c
+}
+
+func (_c *Store_ReconcileQueuedJob_Call) Return(_a0 bool, _a1 error) *Store_ReconcileQueuedJob_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *Store_ReconcileQueuedJob_Call) RunAndReturn(run func(context.Context, params.ForgeEntity, params.Job) (bool, error)) *Store_ReconcileQueuedJob_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SearchFileObjectByTags provides a mock function with given fields: ctx, tags, page, pageSize
 func (_m *Store) SearchFileObjectByTags(ctx context.Context, tags []string, page uint64, pageSize uint64) (params.FileObjectPaginatedResponse, error) {
 	ret := _m.Called(ctx, tags, page, pageSize)

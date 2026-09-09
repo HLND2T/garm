@@ -53,6 +53,35 @@ func TestJobsTestSuite(t *testing.T) {
 	suite.Run(t, new(JobsTestSuite))
 }
 
+func (s *JobsTestSuite) TestTerminalJobCannotRegressOrBeClaimed() {
+	job := params.Job{WorkflowJobID: 998877, Status: string(params.JobStatusCompleted), Action: string(params.JobStatusCompleted), Conclusion: "success"}
+	_, err := s.Store.CreateOrUpdateJob(s.adminCtx, job)
+	s.Require().NoError(err)
+	job.Status, job.Action = string(params.JobStatusQueued), string(params.JobStatusQueued)
+	_, err = s.Store.CreateOrUpdateJob(s.adminCtx, job)
+	s.Require().NoError(err)
+	actual, err := s.Store.GetJobByID(s.adminCtx, job.WorkflowJobID)
+	s.Require().NoError(err)
+	s.Equal(string(params.JobStatusCompleted), actual.Status)
+	s.Error(s.Store.LockJob(s.adminCtx, job.WorkflowJobID, "df4bb064-7050-4b3d-a0f2-675b288cbaf5"))
+}
+
+func (s *JobsTestSuite) TestRecentlyCompletedOldJobRetainsGrace() {
+	db := s.Store.(*sqlDatabase)
+	job := params.Job{WorkflowJobID: 998878, Status: string(params.JobStatusQueued), Action: string(params.JobStatusQueued)}
+	_, err := s.Store.CreateOrUpdateJob(s.adminCtx, job)
+	s.Require().NoError(err)
+	s.Require().NoError(db.conn.Model(&WorkflowJob{}).Where("workflow_job_id = ?", job.WorkflowJobID).
+		UpdateColumn("created_at", time.Now().Add(-2*time.Hour)).Error)
+	job.Status, job.Action = string(params.JobStatusCompleted), string(params.JobStatusCompleted)
+	_, err = s.Store.CreateOrUpdateJob(s.adminCtx, job)
+	s.Require().NoError(err)
+	s.Require().NoError(s.Store.DeleteInactionableJobs(s.adminCtx, 5*time.Minute))
+	actual, err := s.Store.GetJobByID(s.adminCtx, job.WorkflowJobID)
+	s.Require().NoError(err)
+	s.Equal(string(params.JobStatusCompleted), actual.Status)
+}
+
 // TestDeleteInactionableJobs verifies the deletion logic for jobs
 func (s *JobsTestSuite) TestDeleteInactionableJobs() {
 	db := s.Store.(*sqlDatabase)
@@ -118,7 +147,7 @@ func (s *JobsTestSuite) TestDeleteInactionableJobs() {
 	var remaining WorkflowJob
 	err = db.conn.Where("workflow_job_id = ?", 12345).First(&remaining).Error
 	s.Require().NoError(err)
-	s.Require().Equal("queued", remaining.Status)
+	s.Require().Equal(string(params.JobStatusQueued), remaining.Status)
 }
 
 // TestDeleteInactionableJobs_AllScenarios verifies all deletion rules
@@ -213,10 +242,10 @@ func (s *JobsTestSuite) TestDeleteInactionableJobs_WithDuration() {
 	_, err = s.Store.CreateOrUpdateJob(s.adminCtx, oldJob)
 	s.Require().NoError(err)
 
-	// Backdate the old job's created_at
+	// Backdate the terminal observation, not merely the job creation.
 	err = db.conn.Model(&WorkflowJob{}).
 		Where("workflow_job_id = ?", 30002).
-		Update("created_at", time.Now().Add(-2*time.Hour)).Error
+		UpdateColumn("updated_at", time.Now().Add(-2*time.Hour)).Error
 	s.Require().NoError(err)
 
 	var countBefore int64

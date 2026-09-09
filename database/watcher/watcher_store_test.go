@@ -54,7 +54,7 @@ func (s *WatcherStoreTestSuite) TestJobWatcher() {
 		RunID:         2,
 		Action:        "test-action",
 		Conclusion:    "started",
-		Status:        "in_progress",
+		Status:        "queued", // Only queued jobs may be claimed for expansion.
 		Name:          "test-job",
 	}
 

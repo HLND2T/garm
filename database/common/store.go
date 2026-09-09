@@ -129,6 +129,7 @@ type InstanceStore interface {
 }
 
 type JobsStore interface {
+	ReconcileQueuedJob(ctx context.Context, entity params.ForgeEntity, observed params.Job) (bool, error)
 	CreateOrUpdateJob(ctx context.Context, job params.Job) (params.Job, error)
 	ListEntityJobsByStatus(ctx context.Context, entityType params.ForgeEntityType, entityID string, status params.JobStatus) ([]params.Job, error)
 	ListJobsByStatus(ctx context.Context, status params.JobStatus) ([]params.Job, error)
