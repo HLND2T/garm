@@ -37,8 +37,8 @@
 - [x] Implement bounded checks, atomic state updates and queued claims
 - [x] Focused race tests, Linux full-suite race tests and incremental lint
 - [x] Review errors, concurrency, limits and workload safety
-- [ ] Commit and push task changes to an authorized remote
-- [ ] Back up installed binary and stopped database, deploy, verify health
+- [x] Commit and push task changes to an authorized remote
+- [x] Back up installed binary and stopped database, deploy, verify health
 
 ## Acceptance
 
@@ -56,3 +56,18 @@ than promising atomic coordination with GitHub scheduling.
 - Final Linux Go 1.26.2 `go test -race -mod=vendor -tags testing -v -timeout=60m -parallel=4 -p=4 -count=1 ./...`: passed.
 - Incremental golangci-lint against 6c8bbdf: zero issues; diff whitespace check passed.
 - A separate Windows watcher whole-suite `-count=3` run encountered `producer already registered` in TestConsumeWithFilter. The final single-run Windows and Linux full regressions passed; this repeated-suite isolation issue was not expanded into the production fix.
+
+## Deployment evidence (2026-09-09, UTC+08:00)
+
+- Production code: `dfcf0c8844e90bbc4a73047ccf4036339beab210`, pushed to `HLND2T/garm` main.
+- Installed version: `job-reconcile-dfcf0c88`; build metadata reports `vcs.modified=false`.
+- Installed SHA256: `C17C7E7ADBE4E5B0A8225A9DA0C0C101827B5EFBC53741C5A52337294B3C2BCB`.
+- Binary and stopped SQLite DB/WAL/SHM backup: `C:\garm\backups\busy-reconcile-20260909-113715`.
+- Authenticated API version and scheduled-task health verified. Pool limits remained unchanged; business guests were not stopped by the deployment.
+- Natural stale queued records advanced to completed without injected events:
+  - `102320178398`: cancelled, reconciled 11:37:28.520.
+  - `102326791239`: success, reconciled 11:37:29.073.
+  - `102317392267`: success, reconciled 11:37:38.495.
+- At 11:39:54, all three completed records remained inside the five-minute grace window; zero expansion attempts for those jobs and no ERROR lines were observed in the post-deployment log window. Job `102327162172` remained in_progress.
+- At 11:41:17, the Windows pool had one active and one idle runner, within unchanged min-idle/max limits of 1/2.
+- At 11:42:20, all three completed records were still retained. At 11:43:05, after the full grace period, all three had been cleaned up normally; the real running job remained in_progress. Zero expansion attempts for the three old jobs and no ERROR lines were observed from deployment through this final check.
