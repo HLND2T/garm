@@ -695,7 +695,11 @@ func (r *basePoolManager) reapTimedOutRunners(runners []forgeRunner) error {
 		if err != nil {
 			return fmt.Errorf("error fetching instance pool info: %w", err)
 		}
-		if time.Since(instance.UpdatedAt).Minutes() < float64(pool.RunnerTimeout()) {
+		// An explicit bootstrap failure does not need the installation grace period.
+		// Keep the remote offline/absent check below: a delayed failure callback must
+		// never cause an online (possibly busy) runner to be removed.
+		bootstrapFailed := instance.Status == commonParams.InstanceRunning && instance.RunnerStatus == params.RunnerFailed
+		if !bootstrapFailed && time.Since(instance.UpdatedAt).Minutes() < float64(pool.RunnerTimeout()) {
 			continue
 		}
 
@@ -1388,7 +1392,11 @@ func (r *basePoolManager) ensureIdleRunnersForOnePool(pool params.Pool) error {
 
 	idleOrPendingWorkers := []params.Instance{}
 	for _, inst := range existingInstances {
-		if inst.RunnerStatus != params.RunnerActive && inst.RunnerStatus != params.RunnerTerminated {
+		if inst.Status != commonParams.InstancePendingCreate && inst.Status != commonParams.InstanceCreating && inst.Status != commonParams.InstanceRunning {
+			continue
+		}
+		switch inst.RunnerStatus {
+		case params.RunnerPending, params.RunnerInstalling, params.RunnerIdle:
 			idleOrPendingWorkers = append(idleOrPendingWorkers, inst)
 		}
 	}

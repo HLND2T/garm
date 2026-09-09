@@ -41,7 +41,7 @@ function Start-ExecuteWithRetry {
 	)
 	PROCESS {
 		$currentErrorActionPreference = $ErrorActionPreference
-		$ErrorActionPreference = "Continue"
+		$ErrorActionPreference = "Stop"
 		$retryCount = 0
 		while ($true) {
 			try {
@@ -53,10 +53,8 @@ function Start-ExecuteWithRetry {
 
 				if ($_.Exception -is [System.Net.WebException]) {
 					$webResponse = $_.Exception.Response
-					# Skip retry on Error: 4XX (e.g. 401 Unauthorized, 404 Not Found etc.)
-					if ($webResponse -and $webResponse.StatusCode -ge 400 -and $webResponse.StatusCode -lt 500) {
-						# Skip retry on 4xx errors
-						Write-Output "Encountered non-retryable error (4xx): $($_.Exception.Message)"
+					# Retry request timeouts and throttling, but not permanent client errors.
+					if ($webResponse -and $webResponse.StatusCode -ge 400 -and $webResponse.StatusCode -lt 500 -and $webResponse.StatusCode -ne 408 -and $webResponse.StatusCode -ne 429) {
 						$ErrorActionPreference = $currentErrorActionPreference
 						throw
 					}
@@ -67,15 +65,33 @@ function Start-ExecuteWithRetry {
 					throw
 				} else {
 					if ($RetryMessage) {
-						Write-Output $RetryMessage
+						Write-Warning $RetryMessage
 					} elseif ($_) {
-						Write-Output $_
+						Write-Warning "Retrying operation after a transient failure"
 					}
 					Start-Sleep -Seconds $RetryInterval
 				}
 			}
 		}
 	}
+}
+
+function Invoke-GarmWebRequest {
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory=$true)][string]$Uri,
+		[hashtable]$Headers=@{},
+		[string]$Method="Get",
+		[string]$Body,
+		[string]$OutFile
+	)
+	$request = @{ Uri=$Uri; Headers=$Headers; Method=$Method; UseBasicParsing=$true; TimeoutSec=60; ErrorAction="Stop" }
+	if ($PSBoundParameters.ContainsKey("Body")) { $request.Body = $Body }
+	if ($OutFile) { $request.OutFile = $OutFile }
+	# Only replay HTTP requests, never the whole installer or service creation.
+	Start-ExecuteWithRetry -ScriptBlock {
+		Invoke-WebRequest @request
+	} -MaxRetryCount 5 -RetryInterval 5 -RetryMessage "Retrying GARM HTTP request"
 }
 
 function Get-RandomString {
@@ -302,7 +318,7 @@ function Invoke-APICall() {
 		[string]$CallbackURL
 	)
 	PROCESS{
-		Invoke-WebRequest -UseBasicParsing -Method Post -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $CallbackURL -Body (ConvertTo-Json $Payload) | Out-Null
+		Invoke-GarmWebRequest -Method Post -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $CallbackURL -Body (ConvertTo-Json $Payload) | Out-Null
 	}
 }
 
@@ -516,7 +532,7 @@ function Install-Runner() {
 			Throw "Failed to grant privileges"
 		}
 
-		$bundle = wget -UseBasicParsing -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/system/cert-bundle
+		$bundle = Invoke-GarmWebRequest -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/system/cert-bundle
 		$converted = ConvertFrom-Json $bundle
 		foreach ($i in $converted.root_certificates.psobject.Properties){
 			$data = [System.Convert]::FromBase64String($i.Value)
@@ -577,17 +593,17 @@ no_proxy={{ .NoProxy }}
 
 		{{- if .UseJITConfig }}
 		Update-GarmStatus -CallbackURL $CallbackURL -Message "downloading JIT credentials"
-		wget -UseBasicParsing -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/credentials/runner -OutFile (Join-Path $runnerDir ".runner")
-		wget -UseBasicParsing -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/credentials/credentials -OutFile (Join-Path $runnerDir ".credentials")
+		Invoke-GarmWebRequest -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/credentials/runner -OutFile (Join-Path $runnerDir ".runner")
+		Invoke-GarmWebRequest -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/credentials/credentials -OutFile (Join-Path $runnerDir ".credentials")
 
 		Add-Type -AssemblyName System.Security
-		$rsaData = (wget -UseBasicParsing -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/credentials/credentials_rsaparams)
+		$rsaData = (Invoke-GarmWebRequest -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/credentials/credentials_rsaparams)
 		$encodedBytes = [System.Text.Encoding]::UTF8.GetBytes($rsaData)
 		$protectedBytes = [Security.Cryptography.ProtectedData]::Protect( $encodedBytes, $null, [Security.Cryptography.DataProtectionScope]::LocalMachine )
 		[System.IO.File]::WriteAllBytes((Join-Path $runnerDir ".credentials_rsaparams"), $protectedBytes)
 
 		$serviceNameFile = (Join-Path $runnerDir ".service")
-		wget -UseBasicParsing -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/system/service-name -OutFile $serviceNameFile
+		Invoke-GarmWebRequest -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/system/service-name -OutFile $serviceNameFile
 
 		Update-GarmStatus -CallbackURL $CallbackURL -Message "Creating system service"
 		$SVC_NAME=(gc -raw $serviceNameFile)
@@ -601,9 +617,7 @@ no_proxy={{ .NoProxy }}
 		Update-GarmStatus -Message "runner successfully installed" -CallbackURL $CallbackURL -Status "idle" | Out-Null
 
 		{{- else }}
-		$GithubRegistrationToken = Start-ExecuteWithRetry -ScriptBlock {
-			Invoke-WebRequest -UseBasicParsing -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/runner-registration-token/
-		} -MaxRetryCount 5 -RetryInterval 5 -RetryMessage "Retrying download of GitHub registration token..."
+		$GithubRegistrationToken = Invoke-GarmWebRequest -Headers @{"Accept"="application/json"; "Authorization"="Bearer $Token"} -Uri $MetadataURL/runner-registration-token/
 		$argList = @{
 			"--unattended" = $null;
 			"--url" =  "{{ .RepoURL }}";
