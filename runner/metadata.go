@@ -180,11 +180,19 @@ func (r *Runner) getRunnerInstallTemplateContext(instance params.Instance, entit
 		return cloudconfig.InstallRunnerParams{}, fmt.Errorf("failed to find tools: %w", err)
 	}
 
+	// The runner account is normally "runner", but fixed/bespoke guests may run
+	// under a different account. Let a pool opt in via extra_context so the
+	// server-rendered install script targets the same account the provider uses.
+	runnerUser := strings.TrimSpace(extraContext["runner_username"])
+	if runnerUser == "" {
+		runnerUser = defaults.DefaultUser
+	}
+
 	installRunnerParams := cloudconfig.InstallRunnerParams{
 		FileName:          foundTools.GetFilename(),
 		DownloadURL:       foundTools.GetDownloadURL(),
-		RunnerUsername:    defaults.DefaultUser,
-		RunnerGroup:       defaults.DefaultUser,
+		RunnerUsername:    runnerUser,
+		RunnerGroup:       runnerUser,
 		RepoURL:           entity.ForgeURL(),
 		MetadataURL:       instance.MetadataURL,
 		RunnerName:        instance.Name,
